@@ -155,7 +155,7 @@ NodeId PoseGraph2D::AddNode(
     std::shared_ptr<const TrajectoryNode::Data> constant_data,
     const int trajectory_id,
     const std::vector<std::shared_ptr<const Submap2D>>& insertion_submaps) {
-  const transform::Rigid3d optimized_pose(
+  const transform::Rigid3d optimized_pose(  // 节点的全局位姿
       GetLocalToGlobalTransform(trajectory_id) * constant_data->local_pose);
 
   const NodeId node_id = AppendNode(constant_data, trajectory_id,
@@ -165,7 +165,7 @@ NodeId PoseGraph2D::AddNode(
   const bool newly_finished_submap =
       insertion_submaps.front()->insertion_finished();
   AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
-    return ComputeConstraintsForNode(node_id, insertion_submaps,
+    return ComputeConstraintsForNode(node_id, insertion_submaps,  // 计算并添加约束
                                      newly_finished_submap);
   });
   return node_id;
@@ -296,7 +296,7 @@ void PoseGraph2D::ComputeConstraint(const NodeId& node_id,
   }
 
   if (maybe_add_local_constraint) {
-    const transform::Rigid2d initial_relative_pose =
+    const transform::Rigid2d initial_relative_pose =  // 二者间的相对位姿（初始值）
         optimization_problem_->submap_data()
             .at(submap_id)
             .global_pose.inverse() *
@@ -321,14 +321,14 @@ WorkItem::Result PoseGraph2D::ComputeConstraintsForNode(
     const auto& constant_data =
         data_.trajectory_nodes.at(node_id).constant_data;
     submap_ids = InitializeGlobalSubmapPoses(
-        node_id.trajectory_id, constant_data->time, insertion_submaps);
+        node_id.trajectory_id, constant_data->time, insertion_submaps); // 计算新加入的submap的全局位姿（原点)
     CHECK_EQ(submap_ids.size(), insertion_submaps.size());
     const SubmapId matching_id = submap_ids.front();
-    const transform::Rigid2d local_pose_2d =
+    const transform::Rigid2d local_pose_2d =  // 当前节点的局部位姿
         transform::Project2D(constant_data->local_pose *
                              transform::Rigid3d::Rotation(
                                  constant_data->gravity_alignment.inverse()));
-    const transform::Rigid2d global_pose_2d =
+    const transform::Rigid2d global_pose_2d = // 当前节点的全局位姿
         optimization_problem_->submap_data().at(matching_id).global_pose *
         constraints::ComputeSubmapPose(*insertion_submaps.front()).inverse() *
         local_pose_2d;
@@ -344,7 +344,7 @@ WorkItem::Result PoseGraph2D::ComputeConstraintsForNode(
       CHECK(data_.submap_data.at(submap_id).state ==
             SubmapState::kNoConstraintSearch);
       data_.submap_data.at(submap_id).node_ids.emplace(node_id);
-      const transform::Rigid2d constraint_transform =
+      const transform::Rigid2d constraint_transform = // 当前节点在对应submap下的位姿
           constraints::ComputeSubmapPose(*insertion_submaps[i]).inverse() *
           local_pose_2d;
       data_.constraints.push_back(
@@ -360,13 +360,13 @@ WorkItem::Result PoseGraph2D::ComputeConstraintsForNode(
     // trajectories scheduled for deletion.
     // TODO(danielsievers): Add a member variable and avoid having to copy
     // them out here.
-    for (const auto& submap_id_data : data_.submap_data) {
+    for (const auto& submap_id_data : data_.submap_data) {  // 已完成的submaps
       if (submap_id_data.data.state == SubmapState::kFinished) {
         CHECK_EQ(submap_id_data.data.node_ids.count(node_id), 0);
         finished_submap_ids.emplace_back(submap_id_data.id);
       }
     }
-    if (newly_finished_submap) {
+    if (newly_finished_submap) {  // 刚刚完成的submap
       const SubmapId newly_finished_submap_id = submap_ids.front();
       InternalSubmapData& finished_submap_data =
           data_.submap_data.at(newly_finished_submap_id);
@@ -376,10 +376,12 @@ WorkItem::Result PoseGraph2D::ComputeConstraintsForNode(
     }
   }
 
+  // 当前节点和已完成的submaps之间的闭环检测 
   for (const auto& submap_id : finished_submap_ids) {
     ComputeConstraint(node_id, submap_id);
   }
 
+  // 以前节点和刚刚完成的submap之间的闭环检测
   if (newly_finished_submap) {
     const SubmapId newly_finished_submap_id = submap_ids.front();
     // We have a new completed submap, so we look into adding constraints for

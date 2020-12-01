@@ -164,6 +164,7 @@ std::vector<std::shared_ptr<const Submap2D>> ActiveSubmaps2D::InsertRangeData(
       submaps_.back()->num_range_data() == options_.num_range_data()) {
     AddSubmap(range_data.origin.head<2>());
   }
+  // 双地图更新
   for (auto& submap : submaps_) {
     submap->InsertRangeData(range_data, range_data_inserter_.get());
   }

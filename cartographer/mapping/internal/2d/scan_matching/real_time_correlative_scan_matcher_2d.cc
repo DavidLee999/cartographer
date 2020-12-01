@@ -129,8 +129,10 @@ double RealTimeCorrelativeScanMatcher2D::Match(
       options_.linear_search_window(), options_.angular_search_window(),
       rotated_point_cloud, grid.limits().resolution());
 
+  // 先生成旋转点云
   const std::vector<sensor::PointCloud> rotated_scans =
       GenerateRotatedScans(rotated_point_cloud, search_parameters);
+  // 再逐个进行平移
   const std::vector<DiscreteScan2D> discrete_scans = DiscretizeScans(
       grid.limits(), rotated_scans,
       Eigen::Translation2f(initial_pose_estimate.translation().x(),

@@ -74,6 +74,7 @@ std::unique_ptr<transform::Rigid2d> LocalTrajectoryBuilder2D::ScanMatch(
   // the Ceres scan matcher.
   transform::Rigid2d initial_ceres_pose = pose_prediction;
 
+  // CSM匹配
   if (options_.use_online_correlative_scan_matching()) {
     const double score = real_time_correlative_scan_matcher_.Match(
         pose_prediction, filtered_gravity_aligned_point_cloud,
@@ -81,6 +82,7 @@ std::unique_ptr<transform::Rigid2d> LocalTrajectoryBuilder2D::ScanMatch(
     kRealTimeCorrelativeScanMatcherScoreMetric->Observe(score);
   }
 
+  // hector匹配
   auto pose_observation = absl::make_unique<transform::Rigid2d>();
   ceres::Solver::Summary summary;
   ceres_scan_matcher_.Match(pose_prediction.translation(), initial_ceres_pose,
@@ -136,11 +138,12 @@ LocalTrajectoryBuilder2D::AddRangeData(
     return nullptr;
   }
 
+  // 利用位姿外插器，计算获取每个激光点时的传感器位姿
   std::vector<transform::Rigid3f> range_data_poses;
   range_data_poses.reserve(synchronized_data.ranges.size());
   bool warned = false;
   for (const auto& range : synchronized_data.ranges) {
-    common::Time time_point = time + common::FromSeconds(range.point_time.time);
+    common::Time time_point = time + common::FromSeconds(range.point_time.time);  // 获取数据的时间
     if (time_point < extrapolator_->GetLastExtrapolatedTime()) {
       if (!warned) {
         LOG(ERROR)
@@ -151,7 +154,7 @@ LocalTrajectoryBuilder2D::AddRangeData(
       time_point = extrapolator_->GetLastExtrapolatedTime();
     }
     range_data_poses.push_back(
-        extrapolator_->ExtrapolatePose(time_point).cast<float>());
+        extrapolator_->ExtrapolatePose(time_point).cast<float>());  // 位姿插值
   }
 
   if (num_accumulated_ == 0) {
@@ -160,6 +163,7 @@ LocalTrajectoryBuilder2D::AddRangeData(
     accumulated_range_data_ = sensor::RangeData{{}, {}, {}};
   }
 
+  // 激光数据预处理：距离过滤
   // Drop any returns below the minimum range and convert returns beyond the
   // maximum range into misses.
   for (size_t i = 0; i < synchronized_data.ranges.size(); ++i) {
@@ -172,10 +176,10 @@ LocalTrajectoryBuilder2D::AddRangeData(
         range_data_poses[i] * sensor::ToRangefinderPoint(hit);
     const Eigen::Vector3f delta = hit_in_local.position - origin_in_local;
     const float range = delta.norm();
-    if (range >= options_.min_range()) {
+    if (range >= options_.min_range()) {  // 直接滤掉过短距离
       if (range <= options_.max_range()) {
         accumulated_range_data_.returns.push_back(hit_in_local);
-      } else {
+      } else {  // 过长距离转换为负信息
         hit_in_local.position =
             origin_in_local +
             options_.missing_data_ray_length() / range * delta;
@@ -243,6 +247,7 @@ LocalTrajectoryBuilder2D::AddAccumulatedRangeData(
       transform::Embed3D(*pose_estimate_2d) * gravity_alignment;
   extrapolator_->AddPose(time, pose_estimate);
 
+  // 更新地图
   sensor::RangeData range_data_in_local =
       TransformRangeData(gravity_aligned_range_data,
                          transform::Embed3D(pose_estimate_2d->cast<float>()));

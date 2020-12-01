@@ -70,6 +70,7 @@ void CeresScanMatcher2D::Match(const Eigen::Vector2d& target_translation,
                                    initial_pose_estimate.translation().y(),
                                    initial_pose_estimate.rotation().angle()};
   ceres::Problem problem;
+  // hector匹配误差函数
   CHECK_GT(options_.occupied_space_weight(), 0.);
   switch (grid.GetGridType()) {
     case GridType::PROBABILITY_GRID:
@@ -89,15 +90,17 @@ void CeresScanMatcher2D::Match(const Eigen::Vector2d& target_translation,
           nullptr /* loss function */, ceres_pose_estimate);
       break;
   }
+
+  // 初始位姿偏离误差函数
   CHECK_GT(options_.translation_weight(), 0.);
   problem.AddResidualBlock(
       TranslationDeltaCostFunctor2D::CreateAutoDiffCostFunction(
-          options_.translation_weight(), target_translation),
+          options_.translation_weight(), target_translation),   // 平移使用里程计插值结果
       nullptr /* loss function */, ceres_pose_estimate);
   CHECK_GT(options_.rotation_weight(), 0.);
   problem.AddResidualBlock(
       RotationDeltaCostFunctor2D::CreateAutoDiffCostFunction(
-          options_.rotation_weight(), ceres_pose_estimate[2]),
+          options_.rotation_weight(), ceres_pose_estimate[2]),  // 朝向使用CSM结果
       nullptr /* loss function */, ceres_pose_estimate);
 
   ceres::Solve(ceres_solver_options_, &problem, summary);

@@ -257,6 +257,7 @@ void OptimizationProblem2D::Solve(
   ceres::Problem::Options problem_options;
   ceres::Problem problem(problem_options);
 
+  // 添加优化数据（节点）
   // Set the starting point.
   // TODO(hrapp): Move ceres data into SubmapSpec.
   MapById<SubmapId, std::array<double, 3>> C_submaps;
@@ -285,10 +286,12 @@ void OptimizationProblem2D::Solve(
       problem.SetParameterBlockConstant(C_nodes.at(node_id_data.id).data());
     }
   }
+
+  // 添加约束信息，节点和submap间的相对位姿
   // Add cost functions for intra- and inter-submap constraints.
   for (const Constraint& constraint : constraints) {
     problem.AddResidualBlock(
-        CreateAutoDiffSpaCostFunction(constraint.pose),
+        CreateAutoDiffSpaCostFunction(constraint.pose), // 利用测量值初始化
         // Loop closure constraints should have a loss function.
         constraint.tag == Constraint::INTER_SUBMAP
             ? new ceres::HuberLoss(options_.huber_scale())
@@ -321,6 +324,7 @@ void OptimizationProblem2D::Solve(
         continue;
       }
 
+      // 添加里程计约束
       // Add a relative pose constraint based on the odometry (if available).
       std::unique_ptr<transform::Rigid3d> relative_odometry =
           CalculateOdometryBetweenNodes(trajectory_id, first_node_data,
@@ -334,6 +338,7 @@ void OptimizationProblem2D::Solve(
             C_nodes.at(second_node_id).data());
       }
 
+      // 添加激光SLAM节点间相对位移约束
       // Add a relative pose constraint based on consecutive local SLAM poses.
       const transform::Rigid3d relative_local_slam_pose =
           transform::Embed3D(first_node_data.local_pose_2d.inverse() *
