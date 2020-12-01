@@ -35,6 +35,7 @@ class MapBuilder : public MapBuilderInterface {
   explicit MapBuilder(const proto::MapBuilderOptions &options);
   ~MapBuilder() override {}
 
+  // test
   MapBuilder(const MapBuilder &) = delete;
   MapBuilder &operator=(const MapBuilder &) = delete;
 
